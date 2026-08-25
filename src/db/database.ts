@@ -11,10 +11,10 @@ export class StoreDatabase extends Dexie {
 
   constructor() {
     super('PhoneStoreDB');
-    this.version(3).stores({
+    this.version(4).stores({
       users: '++id, phone_number, role, created_at',
       products: '++id, name, categoryId, brand, price, rating, popularity',
-      cartItems: '++id, productId',
+      cartItems: '++id, productId, variantId',
       orders: '++id, userId, status, createdAt',
       profileRequests: '++id, userId, status, type, createdAt',
       promoCodes: '++id, code, isUsed, createdAt'
