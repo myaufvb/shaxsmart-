@@ -37,13 +37,29 @@ export interface Category {
   itemCount?: number;
 }
 
+export type PhoneOS = 'android' | 'iphone';
+export type ItemCondition = 'new' | 'used' | 'ideal';
+
 export interface ProductCharacteristic {
   name: string;
   value: string;
 }
 
-export type PhoneOS = 'android' | 'iphone';
-export type ItemCondition = 'new' | 'used' | 'ideal';
+export interface VariantAttribute {
+  name: string; // e.g. "Цвет", "Память", "Модель"
+  values: string[]; // e.g. ["Черный", "Белый", "Синий"] or ["128 ГБ", "256 ГБ", "512 ГБ"]
+}
+
+export interface ProductVariant {
+  id: string; // e.g. "var_iphone13_black_128"
+  productId: number;
+  attributes: Record<string, string>; // e.g. { "Цвет": "Черный", "Память": "128 ГБ" }
+  price: number;
+  oldPrice?: number;
+  stockQuantity: number;
+  sku?: string;
+  image?: string;
+}
 
 export interface ProductReview {
   id: number;
@@ -72,6 +88,8 @@ export interface Product {
   inStock: boolean;
   stockQuantity?: number; // Управление наличием на складе (шт.)
   reviews?: ProductReview[]; // Отзывы и оценки к товару
+  variantAttributes?: VariantAttribute[]; // Атрибуты для выбора (Цвет, Память и т.д.)
+  variants?: ProductVariant[]; // Все SKU вариации товара
   isNew?: boolean;
   isHit?: boolean;
   // Specific attributes for phones & accessories
@@ -87,7 +105,11 @@ export interface Product {
 export interface CartItem {
   id?: number;
   productId: number;
+  variantId?: string; // Выбранный SKU (вариация)
+  selectedAttributes?: Record<string, string>; // Выбранный цвет, память и т.д.
   quantity: number;
+  priceOverride?: number;
+  imageOverride?: string;
 }
 
 export type OrderStatus = 'awaiting_payment' | 'payment_failed' | 'processing' | 'shipped' | 'completed' | 'canceled';
