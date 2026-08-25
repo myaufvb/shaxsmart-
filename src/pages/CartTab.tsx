@@ -192,55 +192,74 @@ export const CartTab: React.FC<CartTabProps> = ({ onOpenHome, onOpenProductDetai
 
       {/* Items list */}
       <div className="p-4 space-y-3">
-        {items.map(item => (
-          <div
-            key={item.productId}
-            className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm"
-          >
-            {/* Image */}
-            <div 
-              onClick={() => onOpenProductDetails(item.product)}
-              className="w-16 h-16 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 cursor-pointer"
-            >
-              <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
-            </div>
+        {items.map((item, idx) => {
+          const itemPrice = item.priceOverride !== undefined ? item.priceOverride : item.product.price;
+          const itemImage = item.imageOverride || item.product.image;
+          const cartItemId = item.id || idx;
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
+          return (
+            <div
+              key={item.id || `${item.productId}_${item.variantId || idx}`}
+              className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm"
+            >
+              {/* Image */}
               <div 
                 onClick={() => onOpenProductDetails(item.product)}
-                className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400"
+                className="w-16 h-16 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden flex-shrink-0 cursor-pointer"
               >
-                {item.product.name}
+                <img src={itemImage} alt={item.product.name} className="w-full h-full object-cover" />
               </div>
-              <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-0.5">
-                {item.product.brand}
-              </div>
-              <div className="text-xs font-black text-slate-900 dark:text-white mt-1">
-                {formatPrice(item.product.price * item.quantity)}
-              </div>
-            </div>
 
-            {/* Quantity Controls */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 rounded-xl p-1">
-              <button
-                onClick={() => updateQuantity(item.productId, -1)}
-                className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
-              >
-                {item.quantity === 1 ? <Trash2 className="w-3.5 h-3.5 text-rose-500" /> : <Minus className="w-3.5 h-3.5" />}
-              </button>
-              <span className="text-xs font-bold w-5 text-center text-slate-900 dark:text-white">
-                {item.quantity}
-              </span>
-              <button
-                onClick={() => updateQuantity(item.productId, 1)}
-                className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div 
+                  onClick={() => onOpenProductDetails(item.product)}
+                  className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  {item.product.name}
+                </div>
+                
+                {/* Variant Attributes Badge */}
+                {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 ? (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {Object.entries(item.selectedAttributes).map(([attrKey, attrVal]) => (
+                      <span key={attrKey} className="px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 text-[10px] font-bold border border-indigo-200/50 dark:border-indigo-800/50">
+                        {attrKey}: {attrVal}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-0.5">
+                    {item.product.brand}
+                  </div>
+                )}
+
+                <div className="text-xs font-black text-slate-900 dark:text-white mt-1">
+                  {formatPrice(itemPrice * item.quantity)}
+                </div>
+              </div>
+
+              {/* Quantity Controls */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 rounded-xl p-1">
+                <button
+                  onClick={() => updateQuantity(cartItemId, -1)}
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                >
+                  {item.quantity === 1 ? <Trash2 className="w-3.5 h-3.5 text-rose-500" /> : <Minus className="w-3.5 h-3.5" />}
+                </button>
+                <span className="text-xs font-bold w-5 text-center text-slate-900 dark:text-white">
+                  {item.quantity}
+                </span>
+                <button
+                  onClick={() => updateQuantity(cartItemId, 1)}
+                  className="p-1 rounded-lg hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Promo code */}
