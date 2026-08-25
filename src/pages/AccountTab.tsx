@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { UserRole, Product, Order, OrderStatus, PhoneOS, ItemCondition, ProfileChangeRequest, ProfileChangeRequestType, User, PromoCode } from '../types';
+import { UserRole, Product, Order, OrderStatus, PhoneOS, ItemCondition, ProfileChangeRequest, ProfileChangeRequestType, User, PromoCode, VariantAttribute, ProductVariant } from '../types';
 import { db, CATEGORIES_LIST } from '../db/database';
 import { api } from '../services/api';
 import { formatPrice, USD_TO_UZS_DEFAULT_RATE, convertUsdToUzs } from '../utils/format';
@@ -222,6 +222,10 @@ export const AccountTab: React.FC = () => {
 
   // Add / Edit Product Modal Form States
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('Layers');
+  const [categoriesListState, setCategoriesListState] = useState(CATEGORIES_LIST);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('electronics');
   
@@ -257,6 +261,12 @@ export const AccountTab: React.FC = () => {
 
   // Stock Quantity State (для Управления Наличием Склада)
   const [stockQuantityInput, setStockQuantityInput] = useState<string>('5');
+
+  // SKU Product Variants State (для Разработчика/Админа)
+  const [useVariants, setUseVariants] = useState<boolean>(false);
+  const [variantAttrColorText, setVariantAttrColorText] = useState<string>('Черный, Белый, Синий');
+  const [variantAttrOptionText, setVariantAttrOptionText] = useState<string>('iPhone 13, iPhone 14 Pro, Samsung S24');
+  const [variantOptionName, setVariantOptionName] = useState<string>('Модель');
 
   // Handle Avatar Selection from Phone Device (Gallery or Camera, Video or GIF)
   const handleDeviceAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -882,6 +892,39 @@ export const AccountTab: React.FC = () => {
 
     const parsedStock = parseInt(stockQuantityInput) || 0;
 
+    // Generate SKU Variants if enabled
+    let generatedAttributes: VariantAttribute[] | undefined = undefined;
+    let generatedVariants: ProductVariant[] | undefined = undefined;
+
+    if (useVariants) {
+      const colors = variantAttrColorText.split(',').map(s => s.trim()).filter(Boolean);
+      const options = variantAttrOptionText.split(',').map(s => s.trim()).filter(Boolean);
+      const optName = variantOptionName.trim() || 'Вариант';
+
+      generatedAttributes = [
+        { name: 'Цвет', values: colors },
+        { name: optName, values: options }
+      ];
+
+      generatedVariants = [];
+      colors.forEach(col => {
+        options.forEach(opt => {
+          generatedVariants!.push({
+            id: `var_${Date.now()}_${col}_${opt}`.replace(/\s+/g, '_'),
+            productId: editingProduct ? editingProduct.id : 0,
+            attributes: {
+              'Цвет': col,
+              [optName]: opt
+            },
+            price: finalPrice,
+            oldPrice: editingProduct?.oldPrice,
+            stockQuantity: parsedStock,
+            image: photos[0]
+          });
+        });
+      });
+    }
+
     const newProduct: Product = {
       id: editingProduct ? editingProduct.id : Date.now(),
       name: finalName,
@@ -898,6 +941,8 @@ export const AccountTab: React.FC = () => {
       inStock: parsedStock > 0,
       stockQuantity: parsedStock,
       reviews: editingProduct ? (editingProduct.reviews || []) : [],
+      variantAttributes: generatedAttributes || (editingProduct ? editingProduct.variantAttributes : undefined),
+      variants: generatedVariants || (editingProduct ? editingProduct.variants : undefined),
       phoneOS: selectedCategory === 'electronics' ? phoneOS : undefined,
       condition: selectedCategory === 'electronics' ? phoneCondition : undefined,
       color: phoneColor,
@@ -1493,13 +1538,22 @@ export const AccountTab: React.FC = () => {
               </h3>
             </div>
 
-            <button
-              onClick={() => setShowAddProductModal(true)}
-              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/30"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Добавить товар</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAddCategoryModal(true)}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Категория</span>
+              </button>
+              <button
+                onClick={() => setShowAddProductModal(true)}
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/30"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Товар</span>
+              </button>
+            </div>
           </div>
 
           {/* Subtabs */}
@@ -2580,6 +2634,126 @@ export const AccountTab: React.FC = () => {
       )}
 
       {/* ======================================================== */}
+      {/* MODAL: ADD / DELETE CATEGORIES (ДЛЯ РАЗРАБОТЧИКА И АДМИНА) */}
+      {/* ======================================================== */}
+      {showAddCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-sm max-h-[85vh] bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 text-xs animate-slideUp flex flex-col overflow-hidden space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-black text-slate-900 dark:text-white uppercase flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-emerald-600" />
+                <span>Управление категориями</span>
+              </h3>
+              <button onClick={() => setShowAddCategoryModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div className="overflow-y-auto space-y-4 flex-1 pr-1">
+              {/* Form to create */}
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!newCategoryName.trim()) return;
+                const catId = 'cat_' + Date.now();
+                const newCat = {
+                  id: catId,
+                  name: newCategoryName.trim(),
+                  iconName: newCategoryIcon || 'Layers',
+                  badge: 'НОВОЕ'
+                };
+                CATEGORIES_LIST.push(newCat);
+                setCategoriesListState([...CATEGORIES_LIST]);
+                setNewCategoryName('');
+              }} className="space-y-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-[11px] uppercase">
+                  + Добавить новую категорию
+                </span>
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Название категории"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <select
+                    value={newCategoryIcon}
+                    onChange={(e) => setNewCategoryIcon(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs outline-none"
+                  >
+                    <option value="Layers">Слои / Стандарт</option>
+                    <option value="Smartphone">Смартфон</option>
+                    <option value="Watch">Часы</option>
+                    <option value="Headphones">Наушники</option>
+                    <option value="Speaker">Колонка</option>
+                    <option value="Zap">Зарядка</option>
+                    <option value="Shield">Чехол</option>
+                    <option value="Car">Авто</option>
+                  </select>
+
+                  <button
+                    type="submit"
+                    disabled={!newCategoryName.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md disabled:opacity-50 active:scale-95"
+                  >
+                    Создать
+                  </button>
+                </div>
+              </form>
+
+              {/* List of existing categories with Delete option */}
+              <div className="space-y-2">
+                <span className="font-extrabold text-slate-700 dark:text-slate-300 block text-[11px] uppercase">
+                  Существующие категории ({categoriesListState.length}):
+                </span>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {categoriesListState.map((cat, idx) => (
+                    <div
+                      key={cat.id || idx}
+                      className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold"
+                    >
+                      <span className="text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                        {cat.name}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Удалить категорию "${cat.name}"?`)) {
+                            const index = CATEGORIES_LIST.findIndex(c => c.id === cat.id);
+                            if (index !== -1) {
+                              CATEGORIES_LIST.splice(index, 1);
+                              setCategoriesListState([...CATEGORIES_LIST]);
+                            }
+                          }
+                        }}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
+                        title="Удалить категорию"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(false)}
+                className="w-full py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl"
+              >
+                Готово
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* MODAL: USER SUBMIT PROFILE CHANGE REQUEST */}
       {/* ======================================================== */}
       {showUserRequestModal && (
@@ -2680,7 +2854,7 @@ export const AccountTab: React.FC = () => {
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white outline-none"
                 >
-                  {CATEGORIES_LIST.map(c => (
+                  {categoriesListState.map(c => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -3186,6 +3360,70 @@ export const AccountTab: React.FC = () => {
                 <p className="text-[10px] text-slate-500">
                   Если указать 0 — товар будет отображаться как «Под заказ».
                 </p>
+              </div>
+
+              {/* SKU VARIANTS BUILDER (Для разработчика/админа) */}
+              <div className="p-3.5 bg-gradient-to-br from-indigo-50/70 to-sky-50/70 dark:from-slate-800 dark:to-slate-850/60 rounded-2xl border border-indigo-200 dark:border-indigo-800/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-extrabold text-indigo-900 dark:text-indigo-300 text-xs flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Вариации товара (Цвет / Модель)</span>
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={useVariants}
+                    onChange={(e) => setUseVariants(e.target.checked)}
+                    className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                {useVariants && (
+                  <div className="space-y-2.5 pt-1 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        1. Доступные Цвета (через запятую):
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Например: Черный, Белый, Синий, Золотой"
+                        value={variantAttrColorText}
+                        onChange={(e) => setVariantAttrColorText(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          2. Название 2-й опции:
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Модель / Память"
+                          value={variantOptionName}
+                          onChange={(e) => setVariantOptionName(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Список Моделей (через запятую):
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="iPhone 13, iPhone 14 Pro, S24"
+                          value={variantAttrOptionText}
+                          onChange={(e) => setVariantAttrOptionText(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-indigo-600 dark:text-indigo-300 font-semibold">
+                      ✓ Покупатель сможет зайти в карточку товара и сначала выбрать Цвет, а затем выбрать {variantOptionName || 'Модель'} своего телефона.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2">
