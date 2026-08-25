@@ -5,7 +5,11 @@ import { db } from '../db/database';
 export interface CartItemWithProduct {
   id?: number;
   productId: number;
+  variantId?: string;
+  selectedAttributes?: Record<string, string>;
   quantity: number;
+  priceOverride?: number;
+  imageOverride?: string;
   product: Product;
 }
 
@@ -13,9 +17,9 @@ interface CartContextType {
   items: CartItemWithProduct[];
   totalCount: number;
   totalPrice: number;
-  addToCart: (product: Product, quantity?: number) => Promise<void>;
-  updateQuantity: (productId: number, delta: number) => Promise<void>;
-  removeFromCart: (productId: number) => Promise<void>;
+  addToCart: (product: Product, quantity?: number, variantId?: string, selectedAttributes?: Record<string, string>, priceOverride?: number, imageOverride?: string) => Promise<void>;
+  updateQuantity: (cartItemId: number, delta: number) => Promise<void>;
+  removeFromCart: (cartItemId: number) => Promise<void>;
   clearCart: () => Promise<void>;
   favorites: number[];
   toggleFavorite: (productId: number) => void;
@@ -50,7 +54,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           detailed.push({
             id: item.id,
             productId: item.productId,
+            variantId: item.variantId,
+            selectedAttributes: item.selectedAttributes,
             quantity: item.quantity,
+            priceOverride: item.priceOverride,
+            imageOverride: item.imageOverride,
             product: prod
           });
         }
@@ -65,18 +73,36 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reloadCart();
   }, []);
 
-  const addToCart = async (product: Product, quantity: number = 1) => {
-    const existing = await db.cartItems.where('productId').equals(product.id).first();
+  const addToCart = async (
+    product: Product,
+    quantity: number = 1,
+    variantId?: string,
+    selectedAttributes?: Record<string, string>,
+    priceOverride?: number,
+    imageOverride?: string
+  ) => {
+    const rawCart = await db.cartItems.toArray();
+    const existing = rawCart.find(i => 
+      i.productId === product.id && (variantId ? i.variantId === variantId : !i.variantId)
+    );
+
     if (existing && existing.id) {
       await db.cartItems.update(existing.id, { quantity: existing.quantity + quantity });
     } else {
-      await db.cartItems.add({ productId: product.id, quantity });
+      await db.cartItems.add({
+        productId: product.id,
+        variantId,
+        selectedAttributes,
+        quantity,
+        priceOverride,
+        imageOverride
+      });
     }
     await reloadCart();
   };
 
-  const updateQuantity = async (productId: number, delta: number) => {
-    const existing = await db.cartItems.where('productId').equals(productId).first();
+  const updateQuantity = async (cartItemId: number, delta: number) => {
+    const existing = await db.cartItems.get(cartItemId);
     if (!existing || !existing.id) return;
 
     const newQty = existing.quantity + delta;
@@ -88,12 +114,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await reloadCart();
   };
 
-  const removeFromCart = async (productId: number) => {
-    const existing = await db.cartItems.where('productId').equals(productId).first();
-    if (existing && existing.id) {
-      await db.cartItems.delete(existing.id);
-      await reloadCart();
-    }
+  const removeFromCart = async (cartItemId: number) => {
+    await db.cartItems.delete(cartItemId);
+    await reloadCart();
   };
 
   const clearCart = async () => {
@@ -130,7 +153,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const totalCount = items.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = items.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+  const totalPrice = items.reduce((acc, item) => {
+    const itemPrice = item.priceOverride !== undefined ? item.priceOverride : item.product.price;
+    return acc + itemPrice * item.quantity;
+  }, 0);
 
   return (
     <CartContext.Provider
