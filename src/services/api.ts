@@ -23,8 +23,8 @@ export class ApiService {
 
   private constructor() {
     const saved = localStorage.getItem('server_url');
-    // If no saved URL or previously saved was localhost/local IP, upgrade to official Railway cloud server
-    if (saved && !saved.includes('192.168.') && !saved.includes('localhost') && !saved.includes('127.0.0.1')) {
+    // If no saved URL or previously saved was Railway/localhost/local IP, upgrade to Render.com
+    if (saved && !saved.includes('railway') && !saved.includes('192.168.') && !saved.includes('localhost') && !saved.includes('127.0.0.1')) {
       this.serverUrl = saved;
     } else {
       this.serverUrl = DEFAULT_PRODUCTION_SERVER;
