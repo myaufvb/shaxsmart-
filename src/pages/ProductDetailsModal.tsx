@@ -9,7 +9,9 @@ import {
   Truck, 
   RotateCcw, 
   Check,
-  Share2
+  Share2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Product, ProductReview } from '../types';
 import { useCart } from '../context/CartContext';
@@ -31,11 +33,39 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   const { currentUser } = useAuth();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [addedAnimation, setAddedAnimation] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
-  // Reviews state
-  const [reviewsList, setReviewsList] = useState<ProductReview[]>(product?.reviews || []);
+  // Attribute Selection & Variant Matching State
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
+  const [reviewsList, setReviewsList] = useState<ProductReview[]>([]);
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState('');
+
+  // Reset image index when product changes
+  React.useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [product]);
+
+  // Sync state when product changes
+  React.useEffect(() => {
+    if (!product) return;
+
+    setReviewsList(product.reviews || []);
+
+    if (product.variantAttributes && product.variantAttributes.length > 0) {
+      const init: Record<string, string> = {};
+      product.variantAttributes.forEach(attr => {
+        if (attr.values && attr.values.length > 0) {
+          init[attr.name] = attr.values[0];
+        }
+      });
+      setSelectedAttributes(init);
+    } else {
+      setSelectedAttributes({});
+    }
+  }, [product]);
+
+  if (!product) return null;
 
   const handleAddReview = () => {
     if (!newComment.trim() || !product) return;
@@ -55,22 +85,57 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
     setNewComment('');
   };
 
-  if (!product) return null;
-
   const inCart = items.some(i => i.productId === product.id);
   const favorite = isFavorite(product.id);
   const discount = product.oldPrice
     ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
     : null;
 
+  const hasVariants = !!(product.variantAttributes && product.variantAttributes.length > 0 && product.variants && product.variants.length > 0);
+
+  // Find matching variant based on current attribute selection
+  const currentVariant = hasVariants ? product.variants?.find(v => {
+    return Object.entries(selectedAttributes).every(([attrName, attrVal]) => v.attributes[attrName] === attrVal);
+  }) : null;
+
+  // Determine current active price, oldPrice, stock, and image
+  const activePrice = currentVariant ? currentVariant.price : product.price;
+  const activeOldPrice = currentVariant ? currentVariant.oldPrice : product.oldPrice;
+  const activeStock = currentVariant ? currentVariant.stockQuantity : (product.stockQuantity !== undefined ? product.stockQuantity : (product.inStock ? 99 : 0));
+  const isAvailable = activeStock > 0;
+  const activeImage = currentVariant?.image || product.image;
+
+  // Are all required attributes selected?
+  const allAttributesSelected = !hasVariants || (
+    product.variantAttributes?.every(attr => !!selectedAttributes[attr.name])
+  );
+
+  const isAddToCartDisabled = !isAvailable || !allAttributesSelected;
+
   const handleAddToCart = () => {
-    addToCart(product, 1);
+    if (isAddToCartDisabled) return;
+    addToCart(
+      product,
+      1,
+      currentVariant?.id,
+      hasVariants ? selectedAttributes : undefined,
+      activePrice,
+      activeImage
+    );
     setAddedAnimation(true);
     setTimeout(() => setAddedAnimation(false), 1500);
   };
 
   const handleBuyNow = () => {
-    onInstantBuy(product);
+    if (isAddToCartDisabled) return;
+    const variantProduct: Product = {
+      ...product,
+      price: activePrice,
+      oldPrice: activeOldPrice,
+      image: activeImage,
+      stockQuantity: activeStock
+    };
+    onInstantBuy(variantProduct);
   };
 
   const allImages = product.images && product.images.length > 0 ? product.images : [product.image];
@@ -115,15 +180,70 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto pb-28">
-          {/* Main Gallery */}
-          <div className="relative bg-slate-50 dark:bg-slate-950 aspect-[4/3] flex items-center justify-center p-4">
+          {/* Main Gallery with Swipe & Arrows */}
+          <div 
+            className="relative bg-slate-50 dark:bg-slate-950 aspect-[4/3] flex items-center justify-center p-4 select-none touch-pan-y"
+            onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
+            onTouchEnd={(e) => {
+              if (touchStartX === null) return;
+              const touchEndX = e.changedTouches[0].clientX;
+              const diff = touchStartX - touchEndX;
+              if (Math.abs(diff) > 40) {
+                if (diff > 0) {
+                  // Swipe left -> Next image
+                  setSelectedImageIndex(prev => (prev + 1) % allImages.length);
+                } else {
+                  // Swipe right -> Prev image
+                  setSelectedImageIndex(prev => (prev - 1 + allImages.length) % allImages.length);
+                }
+              }
+              setTouchStartX(null);
+            }}
+          >
+            {/* Left Arrow Button */}
+            {allImages.length > 1 && (
+              <button
+                onClick={() => setSelectedImageIndex(prev => (prev - 1 + allImages.length) % allImages.length)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-md text-slate-800 dark:text-white shadow-lg hover:scale-110 active:scale-95 transition-all"
+                title="Предыдущее фото"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+
             <img
-              src={allImages[selectedImageIndex] || product.image}
+              src={allImages[selectedImageIndex] || currentVariant?.image || product.image}
               alt={product.name}
-              className="max-h-full max-w-full object-contain rounded-xl drop-shadow-md transition-all duration-300"
+              className="max-h-full max-w-full object-contain rounded-xl drop-shadow-md transition-all duration-300 pointer-events-none"
             />
+
+            {/* Right Arrow Button */}
+            {allImages.length > 1 && (
+              <button
+                onClick={() => setSelectedImageIndex(prev => (prev + 1) % allImages.length)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-md text-slate-800 dark:text-white shadow-lg hover:scale-110 active:scale-95 transition-all"
+                title="Следующее фото"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* Image Indicator Dots & Counter */}
+            {allImages.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 bg-black/40 backdrop-blur-md rounded-full">
+                {allImages.map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={`h-1.5 rounded-full transition-all ${
+                      selectedImageIndex === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/50'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
             {discount && (
-              <span className="absolute top-4 left-4 bg-rose-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-md">
+              <span className="absolute top-4 left-4 bg-rose-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-md z-10">
                 -{discount}%
               </span>
             )}
@@ -165,22 +285,69 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
               {product.name}
             </h1>
 
-            {/* Price section */}
+            {/* Dynamic Price & Stock section */}
             <div className="flex items-baseline gap-3 pt-1">
               <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                {formatPrice(product.price)}
+                {formatPrice(activePrice)}
               </span>
-              {product.oldPrice && (
+              {activeOldPrice && (
                 <span className="text-sm font-semibold text-slate-400 line-through">
-                  {formatPrice(product.oldPrice)}
+                  {formatPrice(activeOldPrice)}
                 </span>
               )}
-              <span className="ml-auto text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <span className={`ml-auto text-xs font-semibold flex items-center gap-1 px-2.5 py-1 rounded-full ${
+                isAvailable 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' 
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+              }`}>
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
-                {product.inStock ? 'В наличии' : 'Под заказ'}
+                {isAvailable ? `В наличии (${activeStock} шт.)` : 'Нет в наличии'}
               </span>
             </div>
           </div>
+
+          {/* Uzum-Style Interactive Attribute Selectors (Цвет, Память, Модель и т.д.) */}
+          {hasVariants && product.variantAttributes && (
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 space-y-4 bg-slate-50/50 dark:bg-slate-850/40">
+              {product.variantAttributes.map((attr) => (
+                <div key={attr.name} className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      {attr.name}:
+                    </span>
+                    <span className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                      {selectedAttributes[attr.name] || 'Выберите'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {attr.values.map((val) => {
+                      const isSelected = selectedAttributes[attr.name] === val;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAttributes(prev => ({
+                              ...prev,
+                              [attr.name]: val
+                            }));
+                          }}
+                          className={`py-2 px-3.5 rounded-xl font-bold text-xs transition-all border active:scale-95 ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20 scale-105'
+                              : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                          }`}
+                        >
+                          {val}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Value props */}
           <div className="grid grid-cols-3 gap-2 px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-center">
@@ -325,8 +492,11 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
           {/* Button 1: Добавить в корзину */}
           <button
             onClick={handleAddToCart}
+            disabled={isAddToCartDisabled}
             className={`flex-1 py-3.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 border ${
-              inCart
+              isAddToCartDisabled
+                ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
+                : inCart
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-600 dark:text-emerald-400'
                 : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
             }`}
@@ -336,6 +506,8 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                 <Check className="w-4 h-4 text-emerald-500 animate-bounce" />
                 <span className="text-emerald-600 dark:text-emerald-400">Добавлено!</span>
               </>
+            ) : !isAvailable ? (
+              <span>Нет на складе</span>
             ) : inCart ? (
               <>
                 <Check className="w-4 h-4" />
@@ -352,10 +524,11 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
           {/* Button 2: Купить прямо сейчас */}
           <button
             onClick={handleBuyNow}
-            className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+            disabled={isAddToCartDisabled}
+            className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
           >
             <Zap className="w-4 h-4 fill-white text-white" />
-            <span>Купить прямо сейчас</span>
+            <span>{isAvailable ? 'Купить прямо сейчас' : 'Недоступно'}</span>
           </button>
         </div>
       </div>
