@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления — Telegram Guard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="navbar">
+        <div class="brand">
+            <span class="brand-icon">🛡️</span>
+            <span>Telegram Guard Shield</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="color: var(--text-secondary); font-size: 0.9rem;">Пользователь: <strong>{{ user.username }}</strong> ({{ user.phone_number }})</span>
+            <form action="/api/logout" method="POST" style="margin: 0;">
+                <button type="submit" class="btn btn-danger" style="padding: 8px 14px; font-size: 0.85rem;">Выйти</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="dashboard-grid">
+            <!-- Sidebar Navigation -->
+            <aside class="side-menu">
+                <button class="menu-btn dash-menu-btn active" data-tab="tg-shield">
+                    <span>🛡️</span> Защита Telegram
+                </button>
+                <button class="menu-btn dash-menu-btn" data-tab="site-security">
+                    <span>🔐</span> Защита аккаунта на сайте
+                </button>
+                <button class="menu-btn dash-menu-btn" data-tab="settings">
+                    <span>⚙️</span> Настройки
+                </button>
+            </aside>
+
+            <!-- Main Content Area -->
+            <section class="card" style="padding: 2.2rem;">
+                
+                <!-- Tab 1: Защита Telegram -->
+                <div id="tab-tg-shield" class="dash-tab-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h2>Защита аккаунта Telegram</h2>
+                        <span class="badge badge-success">● Защита активна</span>
+                    </div>
+
+                    <!-- Device Limit Control -->
+                    <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: var(--radius); border: 1px solid var(--border-color); margin-bottom: 2rem;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Ограничение количества устройств</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                            Укажите максимальное количество устройств, которым разрешено находиться в вашем аккаунте.
+                            При попытке входа любого лишнего устройства система сбросит его сессию.
+                        </p>
+
+                        <form id="deviceLimitForm" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <div style="width: 140px;">
+                                <input type="number" id="deviceLimitInput" name="device_limit" class="form-control" min="1" max="20" value="{{ config.device_limit }}" required style="font-size: 1.1rem; font-weight: 700; text-align: center;">
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 24px;">Сохранить лимит</button>
+                            <span id="limitUpdateMsg" style="font-size: 0.9rem;"></span>
+                        </form>
+                    </div>
+
+                    <!-- Active Sessions Watchdog -->
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem;">Активные сессии в Telegram</h3>
+                    <table class="session-table">
+                        <thead>
+                            <tr>
+                                <th>Устройство</th>
+                                <th>IP-адрес</th>
+                                <th>Дата активности</th>
+                                <th>Статус</th>
+                                <th>Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <strong>Windows PC / Telegram Desktop</strong><br>
+                                    <small style="color: var(--text-secondary);">Текущая сессия (Ваш ПК)</small>
+                                </td>
+                                <td>185.220.101.4</td>
+                                <td>Только что</td>
+                                <td><span class="badge badge-success">Разрешено</span></td>
+                                <td><span style="color: var(--text-secondary); font-size: 0.85rem;">Основная</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <strong>iPhone 15 Pro / iOS Telegram</strong><br>
+                                    <small style="color: var(--text-secondary);">Мобильное устройство</small>
+                                </td>
+                                <td>82.145.210.12</td>
+                                <td>2 мин. назад</td>
+                                <td><span class="badge badge-success">Разрешено</span></td>
+                                <td><button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem; width: auto;">Сбросить</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tab 2: Защита аккаунта на сайте -->
+                <div id="tab-site-security" class="dash-tab-content" style="display: none;">
+                    <h2 style="margin-bottom: 1.5rem;">Защита аккаунта на сайте</h2>
+
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="font-size: 1.05rem; margin-bottom: 1rem;">Смена пароля веб-кабинета</h3>
+                        <form style="max-width: 400px;">
+                            <div class="form-group">
+                                <label>Текущий пароль</label>
+                                <input type="password" class="form-control" placeholder="••••••••">
+                            </div>
+                            <div class="form-group">
+                                <label>Новый пароль</label>
+                                <input type="password" class="form-control" placeholder="Новый надежный пароль">
+                            </div>
+                            <button type="button" class="btn btn-secondary">Обновить пароль</button>
+                        </form>
+                    </div>
+
+                    <div>
+                        <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">Двухфакторная аутентификация сайта</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                            Авторизация через бота Telegram <code>@Defense_telegram_lerman_bot</code> включена по умолчанию.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Настройки -->
+                <div id="tab-settings" class="dash-tab-content" style="display: none;">
+                    <h2 style="margin-bottom: 1.5rem;">Настройки системы</h2>
+
+                    <div class="form-group" style="max-width: 500px;">
+                        <label>Telegram API ID (для отслеживания сессий MTProto)</label>
+                        <input type="text" class="form-control" value="{{ config.api_id or '' }}" placeholder="Например: 1234567">
+                    </div>
+
+                    <div class="form-group" style="max-width: 500px;">
+                        <label>Telegram API Hash</label>
+                        <input type="password" class="form-control" value="{{ config.api_hash or '' }}" placeholder="a1b2c3d4e5f6...">
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1.5rem;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" checked style="width: 18px; height: 18px;">
+                            <span>Отправлять мгновенные уведомления в бота Telegram при сбросе 3-го устройства</span>
+                        </label>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
